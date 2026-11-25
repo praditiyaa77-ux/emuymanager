@@ -231,15 +231,31 @@ class VM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Throwable) { shizuku = ShState.Off }
     }
 
+    private fun openShizukuApp(): Boolean {
+        val i = app.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api") ?: return false
+        app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return true
+    }
+
     fun askShizuku() {
         try {
             if (!Shizuku.pingBinder()) {
-                val i = app.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                if (i != null) app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                else msg = "Shizuku belum terpasang. Pasang aplikasi Shizuku lalu aktifkan lewat Wireless debugging."
-            } else if (Shizuku.shouldShowRequestPermissionRationale()) {
-                msg = "Izin ditolak. Aktifkan manual di aplikasi Shizuku (daftar aplikasi berizin)."
-            } else Shizuku.requestPermission(1)
+                if (!openShizukuApp()) msg = "Shizuku belum terpasang. Pasang aplikasi Shizuku lalu aktifkan lewat Wireless debugging."
+                return
+            }
+            val manual = "Buka Shizuku → Aplikasi berizin → aktifkan File Manager Pro, lalu kembali ke sini."
+            if (Shizuku.shouldShowRequestPermissionRationale()) {
+                msg = "Izin pernah ditolak. $manual"
+                openShizukuApp()
+                return
+            }
+            msg = "Meminta izin Shizuku…"
+            Shizuku.requestPermission(1)
+            viewModelScope.launch {
+                delay(2500)
+                updateShizuku()
+                if (shizuku == ShState.NoPerm) { msg = "Dialog izin tidak muncul. $manual"; openShizukuApp() }
+            }
         } catch (e: Throwable) { msg = "Shizuku error: ${e.message}" }
     }
 
